@@ -8,14 +8,17 @@
 /**
  * @brief Module dọn dẹp an toàn & thông minh thư mục Downloads:
  * 
- * 1. NGUYÊN TẮC AN TOÀN TUYỆT ĐỐI (WHITELIST):
+ * 1. NGUYÊN TẮC AN TOÀN TUYỆT ĐỐI (WHITELIST & PHÂN BIỆT XÓA):
  *    - CHỈ xử lý đúng 4 nhóm file:
  *      + File tải dở dang/lỗi: .crdownload, .part, .tmp (quá 24h)
+ *        ==> XÓA CỨNG TRIỆT ĐỂ (hard delete vì không có giá trị khôi phục).
  *      + File cài đặt: .exe, .msi
  *      + File ảnh: .jpg, .jpeg, .png, .gif, .webp, .bmp, .svg, .ico, .tiff
  *      + File video: .mp4, .mkv, .avi, .mov, .wmv, .flv, .webm, .m4v
+ *        ==> XÓA MỀM (soft delete đưa vào Thùng rác, tạo điều kiện lấy lại file).
  *    - TUYỆT ĐỐI KHÔNG chạm vào bất kỳ file nào khác (tài liệu, nén zip/rar, code...).
- *    - MỌI file được dọn đều chuyển vào THÙNG RÁC (Recycle Bin), KHÔNG xóa vĩnh viễn.
+ *    - THỨ TỰ THIẾT KẾ: Trong chuỗi tự động, lệnh dọn Downloads luôn CHẠY CUỐI CÙNG
+ *      sau khi hệ thống đã xóa sạch sành sanh Thùng rác trước đó!
  * 
  * 2. CƠ CHẾ DỌN FILE CÀI ĐẶT (.exe, .msi):
  *    - Đọc PE Header Version Info (ProductName, FileDescription)

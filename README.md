@@ -105,14 +105,20 @@ Hệ thống được chia thành **5 nhóm module chuyên biệt**, mỗi nhóm
 
 ### 5. Dọn Dẹp An Toàn & Thông Minh Thư Mục Downloads (`DownloadsCleaner`)
 
-#### 🛡️ Cơ Chế An Toàn Tuyệt Đối (Strict Whitelist):
-1. **Chỉ quét đúng 4 nhóm file được phép**:
-   * **File tải lỗi/dở dang**: `.crdownload`, `.part`, `.tmp` (chỉ xóa nếu cũ hơn 24 giờ).
-   * **Bộ cài đặt**: `.exe`, `.msi`.
-   * **File ảnh**: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.bmp`, `.svg`, `.ico`, `.tiff`.
-   * **File video**: `.mp4`, `.mkv`, `.avi`, `.mov`, `.wmv`, `.flv`, `.webm`, `.m4v`.
-2. **Tuyệt đối không đụng đến file khác**: Toàn bộ file tài liệu (`.pdf`, `.docx`, `.xlsx`, `.pptx`, `.txt`), file nén (`.zip`, `.rar`, `.7z`), file mã nguồn hoặc file nhị phân khác **đều được bỏ qua hoàn toàn**.
-3. **Không xóa cứng (Không Permanent Delete)**: Tất cả file dọn dẹp từ Downloads đều được chuyển vào **Thùng rác (Recycle Bin)** bằng Windows Shell API (`SHFileOperationW` với cờ `FOF_ALLOWUNDO`). Người dùng có thể khôi phục lại bất kỳ lúc nào nếu muốn.
+#### 🛡️ Cơ Chế Phân Biệt Xóa Cứng vs Xóa Mềm:
+1. **XÓA CỨNG TRIỆT ĐỂ (Hard Delete)**:
+   * Áp dụng riêng cho **File tải lỗi/dở dang**: `.crdownload`, `.part`, `.tmp` (cũ hơn 24 giờ).
+   * Các file này bị ngắt kết nối tải, hỏng header hoặc đứt gãy giữa chừng, hoàn toàn không có giá trị khôi phục $\rightarrow$ Xóa vĩnh viễn trực tiếp bằng `CleanerCore::safeDeleteFile`, không đưa vào Thùng rác làm bẩn sọt rác.
+2. **XÓA MỀM AN TOÀN (Soft Delete)**:
+   * Áp dụng cho **File trùng lặp (Ảnh, Video, Exe)** và **Bộ cài đặt của app đã cài**.
+   * Chuyển vào **Thùng rác (Recycle Bin)** bằng Windows Shell API (`SHFileOperationW` với cờ `FOF_ALLOWUNDO`) $\rightarrow$ Tạo điều kiện lấy lại file bất cứ khi nào bạn muốn.
+
+#### ⚡ GIẢI QUYẾT XUNG ĐỘT THỨ TỰ (Execution Order Guarantee):
+* **Vấn đề tiềm ẩn**: Nếu lệnh dọn Thùng rác (`emptyRecycleBin`) chạy sau hoặc chạy xen kẽ, nó sẽ vô hình cuốn sạch luôn cả các file trùng vừa mới xóa mềm vào sọt rác!
+* **Cách khắc phục chuẩn**:
+  * Trong chuỗi tự động (`runAll` hoặc `--all`), lệnh **Làm rỗng Thùng rác** được thực thi **TRƯỚC** để quét sạch sẽ toàn bộ rác tồn dư cũ của hệ thống.
+  * Lệnh dọn dẹp thư mục **Downloads LUÔN NẰM Ở CUỐI CÙNG** của chuỗi tự động.
+  * **KẾT QUẢ**: Khi chương trình kết thúc, Thùng rác của bạn **sạch bóng mọi rác cũ**, và **CHỈ CHỨA DUY NHẤT các file trùng lặp của Downloads** vừa ném vào, an toàn 100% để bạn kiểm tra hoặc khôi phục!
 
 #### 📦 Logic Dọn File Cài Đặt (.exe, .msi):
 * Trích xuất thông tin `ProductName` từ PE Header Version Resource (thông qua `version.dll`).

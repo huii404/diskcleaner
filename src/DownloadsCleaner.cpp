@@ -229,8 +229,8 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
                 if (nowTime.QuadPart > fileTime.QuadPart) {
                     ULONGLONG diffSeconds = (nowTime.QuadPart - fileTime.QuadPart) / 10000000ULL;
                     if (diffSeconds >= 24 * 3600) { // Cũ hơn 24 giờ
-                        // Chuyển vào Thùng rác để an toàn
-                        CleanerCore::moveToRecycleBin(entry.path(), dryRun, stats);
+                        // XÓA CỨNG TRIỆT ĐỂ: File lỗi/dở dang không có giá trị phục hồi
+                        CleanerCore::safeDeleteFile(entry.path(), dryRun, stats);
                     }
                 }
             }

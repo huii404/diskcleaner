@@ -82,12 +82,31 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
                   << " (" << s.filesDeleted << " files, " << s.dirsDeleted << " dirs)\n\n";
     }
 
+    // NGUYÊN TẮC THỨ TỰ AN TOÀN:
+    // Làm sạch toàn bộ Thùng rác hệ thống TRƯỚC KHI lệnh dọn Downloads chạy.
+    // Nhờ đó, file trùng lặp đưa vào sọt rác ở bước cuối sẽ KHÔNG bị lệnh làm rỗng thùng rác xóa mất!
+    if (scope == CleanScope::All) {
+        std::cout << CleanerCore::C_CYAN << " [*] Đang dọn sạch Thùng rác hệ thống (trước khi xử lý Downloads)...\n" << CleanerCore::C_RESET;
+        CleanStats sRb;
+        CleanerCore::emptyRecycleBin(dryRun, sRb);
+        total.add(sRb);
+        std::cout << "     └── Đã dọn sạch Thùng rác: " << CleanerCore::C_GREEN << CleanerCore::formatSize(sRb.bytesFreed) << CleanerCore::C_RESET
+                  << " (" << sRb.filesDeleted << " files cũ đã giải phóng)\n\n";
+    }
+
+    // LỆNH DỌN DOWNLOADS NẰM Ở CUỐI CÙNG:
+    // - File tải dở dang / lỗi (.crdownload, .part, .tmp): XÓA CỨNG TRIỆT ĐỂ.
+    // - File lặp/trùng chỉ số nhỏ (file (1), file (2)...): XÓA MỀM (đưa vào Thùng rác để có thể lấy lại).
     if (scope == CleanScope::DownloadsSmart || scope == CleanScope::All) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Phân tích thông minh thư mục Downloads...\n" << CleanerCore::C_RESET;
+        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Thư mục Downloads (CHẠY CUỐI CÙNG)...\n" << CleanerCore::C_RESET;
         CleanStats s = DownloadsCleaner::clean(dryRun);
         total.add(s);
-        std::cout << "     └── Đã đưa vào Thùng rác: " << CleanerCore::C_YELLOW << CleanerCore::formatSize(s.bytesRecycled) << CleanerCore::C_RESET
-                  << " (" << s.filesRecycled << " bộ cài/trùng lặp)\n\n";
+        if (s.filesDeleted > 0) {
+            std::cout << "     ├── [XÓA CỨNG] File tải lỗi/dở dang (.crdownload, .part): " << CleanerCore::C_GREEN << CleanerCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
+                      << " (" << s.filesDeleted << " files)\n";
+        }
+        std::cout << "     └── [XÓA MỀM] Đã đưa vào Thùng rác (file trùng lặp & bộ cài): " << CleanerCore::C_YELLOW << CleanerCore::formatSize(s.bytesRecycled) << CleanerCore::C_RESET
+                  << " (" << s.filesRecycled << " files - có thể khôi phục từ Recycle Bin)\n\n";
     }
 
     return total;
