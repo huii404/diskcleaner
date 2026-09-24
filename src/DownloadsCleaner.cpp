@@ -6,6 +6,7 @@
 #include <regex>
 #include <algorithm>
 #include <shlobj.h>
+#include <winver.h>
 
 bool DownloadsCleaner::isCorruptDownload(const std::string& ext) {
     return (ext == ".crdownload" || ext == ".part" || ext == ".tmp");
@@ -112,34 +113,12 @@ std::unordered_set<std::string> DownloadsCleaner::getInstalledAppNames() {
 }
 
 std::string DownloadsCleaner::getExeProductName(const std::string& exePath) {
-    HMODULE hVer = LoadLibraryA("version.dll");
-    if (!hVer) return "";
-
-    typedef DWORD (WINAPI *pfnGetFileVersionInfoSizeA)(LPCSTR, LPDWORD);
-    typedef BOOL (WINAPI *pfnGetFileVersionInfoA)(LPCSTR, DWORD, DWORD, LPVOID);
-    typedef BOOL (WINAPI *pfnVerQueryValueA)(LPCVOID, LPCSTR, LPVOID*, PUINT);
-
-    auto pGetSize = (pfnGetFileVersionInfoSizeA)GetProcAddress(hVer, "GetFileVersionInfoSizeA");
-    auto pGetInfo = (pfnGetFileVersionInfoA)GetProcAddress(hVer, "GetFileVersionInfoA");
-    auto pQueryVal = (pfnVerQueryValueA)GetProcAddress(hVer, "VerQueryValueA");
-
-    if (!pGetSize || !pGetInfo || !pQueryVal) {
-        FreeLibrary(hVer);
-        return "";
-    }
-
     DWORD dummy = 0;
-    DWORD size = pGetSize(exePath.c_str(), &dummy);
-    if (size == 0) {
-        FreeLibrary(hVer);
-        return "";
-    }
+    DWORD size = GetFileVersionInfoSizeA(exePath.c_str(), &dummy);
+    if (size == 0) return "";
 
     std::vector<BYTE> data(size);
-    if (!pGetInfo(exePath.c_str(), 0, size, data.data())) {
-        FreeLibrary(hVer);
-        return "";
-    }
+    if (!GetFileVersionInfoA(exePath.c_str(), 0, size, data.data())) return "";
 
     struct LANGANDCODEPAGE {
         WORD wLanguage;
@@ -155,13 +134,13 @@ std::string DownloadsCleaner::getExeProductName(const std::string& exePath) {
         sprintf_s(subBlock, sizeof(subBlock), blockFormat, lang, cp, field);
         LPVOID lpBuffer = NULL;
         UINT sizeStr = 0;
-        if (pQueryVal(data.data(), subBlock, &lpBuffer, &sizeStr) && lpBuffer && sizeStr > 0) {
+        if (VerQueryValueA(data.data(), subBlock, &lpBuffer, &sizeStr) && lpBuffer && sizeStr > 0) {
             return std::string((char*)lpBuffer);
         }
         return "";
     };
 
-    if (pQueryVal(data.data(), "\\VarFileInfo\\Translation", (LPVOID*)&lpTranslate, &cbTranslate) && 
+    if (VerQueryValueA(data.data(), "\\VarFileInfo\\Translation", (LPVOID*)&lpTranslate, &cbTranslate) &&
         cbTranslate >= sizeof(struct LANGANDCODEPAGE)) {
         WORD lang = lpTranslate[0].wLanguage;
         WORD cp = lpTranslate[0].wCodePage;
@@ -179,8 +158,6 @@ std::string DownloadsCleaner::getExeProductName(const std::string& exePath) {
             if (!productName.empty()) break;
         }
     }
-
-    FreeLibrary(hVer);
 
     auto isGenericEngine = [](const std::string &val) -> bool {
         std::string lower = CleanerCore::toLower(val);
@@ -249,7 +226,6 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
         std::string ext;
         std::string baseStem;
         int copyIndex;       // 0: bản gốc (file.ext), >=1: bản sao Windows đánh số file (1).ext
-        uintmax_t size;
     };
 
     // Regex phát hiện bản sao Windows: "filename (1).ext", "filename (2).ext"
@@ -273,8 +249,6 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
 
         std::string filename = entry.path().filename().string();
         std::string stem = entry.path().stem().string();
-        uintmax_t sz = entry.file_size(ec);
-
         std::string baseStem = stem;
         int copyIndex = 0;
         std::smatch match;
@@ -287,7 +261,7 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
         std::string groupKey = lowerBaseStem + ext;
         if (groupKey.empty()) groupKey = filename;
 
-        groups[groupKey].push_back({entry.path(), filename, ext, baseStem, copyIndex, sz});
+        groups[groupKey].push_back({entry.path(), filename, ext, baseStem, copyIndex});
     }
 
     auto installed = getInstalledAppNames();
@@ -368,7 +342,7 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
         // B. NẾU ỨNG DỤNG CHƯA CÀI ĐẶT, HOẶC LÀ FILE ẢNH, HOẶC LÀ FILE VIDEO:
         //    ÁP DỤNG QUY TẮC DỌN TRÙNG LẶP:
         //    "CHỈ GIỮ TÊN GỐC (file.ext) VÀ TÊN CÓ CHỈ SỐ CAO NHẤT (file (N).ext)"
-        //    CÁC BẢN SAO Ở GIỮA ĐỀU ĐƯỢC CHUYỂN VÀO THÙNG RÁC.
+        //    BẢN SAO Ở GIỮA CHỈ ĐƯỢC CHUYỂN VÀO THÙNG RÁC NẾU NỘI DUNG GIỐNG HỆT.
         if (fileList.size() > 1) {
             // Sắp xếp tăng dần theo chỉ số copyIndex (0, 1, 2, ..., N)
             std::sort(fileList.begin(), fileList.end(), [](const DownloadFileItem &a, const DownloadFileItem &b) {
@@ -405,9 +379,24 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
                     continue;
                 }
 
-                // Các file còn lại (file (1), file (2)... nằm giữa gốc và cao nhất)
-                // được đưa vào Thùng rác để giải phóng dung lượng!
-                CleanerCore::moveToRecycleBin(fileList[i].fullPath, dryRun, stats);
+                // Tên dạng "file (N)" chưa đủ chứng minh là bản sao. Chỉ xóa khi
+                // nội dung giống hệt một trong các bản được giữ lại.
+                bool isExactDuplicate = false;
+                if (hasBase) {
+                    isExactDuplicate = CleanerCore::filesHaveSameContent(
+                        fileList[i].fullPath, fileList[0].fullPath);
+                }
+                if (!isExactDuplicate && maxCopyIndex > 0) {
+                    isExactDuplicate = CleanerCore::filesHaveSameContent(
+                        fileList[i].fullPath, fileList[highestIdx].fullPath);
+                }
+                if (!hasBase && !isExactDuplicate) {
+                    isExactDuplicate = CleanerCore::filesHaveSameContent(
+                        fileList[i].fullPath, fileList[0].fullPath);
+                }
+                if (isExactDuplicate) {
+                    CleanerCore::moveToRecycleBin(fileList[i].fullPath, dryRun, stats);
+                }
             }
         }
     }

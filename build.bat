@@ -20,7 +20,6 @@ if %errorlevel% equ 0 (
 
 if "!GXX!"=="" (
     echo [!] LOI: Khong tim thay compiler g++ tren he thong.
-    pause
     exit /b 1
 )
 
@@ -29,14 +28,11 @@ echo [✓] Tim thay trinh bien dich: !GXX!
 if not exist "bin" mkdir "bin"
 
 echo [*] Dang bien dich cac module sang bin\cleaner.exe...
-taskkill /f /im cleaner.exe >nul 2>nul
-
-"!GXX!" -std=c++17 -O3 -Iinclude src\*.cpp -lshlwapi -lshell32 -lole32 -ladvapi32 -lversion -luuid -static-libgcc -static-libstdc++ -static -s -o bin\cleaner.exe
+"!GXX!" -std=c++17 -O2 -Wall -Wextra -Wpedantic -Iinclude src\*.cpp -lshell32 -lole32 -ladvapi32 -lversion -luuid -static -s -o bin\cleaner.exe
 
 if %errorlevel% neq 0 (
     echo.
     echo [!] BIEN DICH THAT BAI!
-    pause
     exit /b 1
 )
 
@@ -45,7 +41,6 @@ echo [✓] BIEN DICH THANH CONG: bin\cleaner.exe
 echo.
 echo Cach su dung:
 echo   bin\cleaner.exe          : Mo menu tuong tac
-echo   bin\cleaner.exe --scan   : Quet phan tich (Dry-run, khong xoa)
 echo   bin\cleaner.exe --all    : Don dep toan bo
+echo   bin\cleaner.exe --auto   : Don dep tu dong voi dashboard
 echo.
-pause

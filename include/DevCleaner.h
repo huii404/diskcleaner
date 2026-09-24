@@ -22,7 +22,7 @@ private:
                                        bool dryRun,
                                        CleanStats& stats);
 public:
-    static CleanStats clean(bool dryRun = false);
+    static CleanStats clean(bool dryRun = false, bool scanProjects = true);
 };
 
 #endif // DEV_CLEANER_H

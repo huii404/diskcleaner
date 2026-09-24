@@ -2,10 +2,33 @@
 #include <iostream>
 #include <vector>
 
+namespace {
+bool queryServiceRunning(const wchar_t* serviceName, bool& running) {
+    running = false;
+    SC_HANDLE scm = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+    if (!scm) return false;
+    SC_HANDLE service = OpenServiceW(scm, serviceName, SERVICE_QUERY_STATUS);
+    if (!service) {
+        CloseServiceHandle(scm);
+        return false;
+    }
+
+    SERVICE_STATUS_PROCESS status{};
+    DWORD bytesNeeded = 0;
+    bool ok = QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO,
+                                   reinterpret_cast<LPBYTE>(&status), sizeof(status),
+                                   &bytesNeeded) != FALSE;
+    if (ok) running = status.dwCurrentState == SERVICE_RUNNING;
+    CloseServiceHandle(service);
+    CloseServiceHandle(scm);
+    return ok;
+}
+}
+
 CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
     CleanStats stats;
 
-    if (!CleanerCore::isElevated()) {
+    if (!dryRun && !CleanerCore::isElevated()) {
         std::cout << CleanerCore::C_RED << " [!] LƯU Ý: Module dọn dẹp hệ thống chuyên sâu yêu cầu quyền Administrator!\n" << CleanerCore::C_RESET;
         return stats;
     }
@@ -21,28 +44,37 @@ CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
     
     // RAII Scope Guard: Đảm bảo các dịch vụ cập nhật luôn được khôi phục dù có sự cố xảy ra
     struct WuServiceGuard {
-        bool shouldRestart = false;
+        bool restartBits = false;
+        bool restartWuauserv = false;
         ~WuServiceGuard() {
-            if (shouldRestart) {
+            if (restartBits) {
                 CleanerCore::runCommand("net start bits >nul 2>&1", true);
+            }
+            if (restartWuauserv) {
                 CleanerCore::runCommand("net start wuauserv >nul 2>&1", true);
             }
         }
     } wuGuard;
 
     if (!dryRun) {
-        // Tạm dừng dịch vụ Windows Update để tránh file locked
-        CleanerCore::runCommand("net stop wuauserv >nul 2>&1", true);
-        CleanerCore::runCommand("net stop bits >nul 2>&1", true);
-        wuGuard.shouldRestart = true;
+        // Chỉ khởi động lại những dịch vụ vốn đang chạy trước tác vụ.
+        bool wuauservRunning = false;
+        bool bitsRunning = false;
+        if (queryServiceRunning(L"wuauserv", wuauservRunning) && wuauservRunning) {
+            wuGuard.restartWuauserv = CleanerCore::runCommand("net stop wuauserv >nul 2>&1", true);
+        }
+        if (queryServiceRunning(L"bits", bitsRunning) && bitsRunning) {
+            wuGuard.restartBits = CleanerCore::runCommand("net stop bits >nul 2>&1", true);
+        }
     }
 
     CleanerCore::wipeFolderContents(wuDownloadPath, dryRun, stats);
 
-    if (wuGuard.shouldRestart) {
-        CleanerCore::runCommand("net start bits >nul 2>&1", true);
-        CleanerCore::runCommand("net start wuauserv >nul 2>&1", true);
-        wuGuard.shouldRestart = false; // Đã start thành công, tránh chạy lại trong destructor
+    if (wuGuard.restartBits && CleanerCore::runCommand("net start bits >nul 2>&1", true)) {
+        wuGuard.restartBits = false;
+    }
+    if (wuGuard.restartWuauserv && CleanerCore::runCommand("net start wuauserv >nul 2>&1", true)) {
+        wuGuard.restartWuauserv = false;
     }
 
     // 2. Dọn Delivery Optimization Cache
@@ -89,10 +121,13 @@ CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
         CleanerCore::safeDeleteFile(file, dryRun, stats);
     }
 
-    // 5. Chạy DISM Component Store Cleanup (Thu hồi dung lượng WinSxS)
+    // 5. Chạy DISM Component Store Cleanup an toàn (vẫn cho phép gỡ bản cập nhật).
     if (runDismCleanup && !dryRun) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang thực thi DISM Component Cleanup (WinSxS /resetbase)... Có thể mất vài phút...\n" << CleanerCore::C_RESET;
-        CleanerCore::runCommand("dism.exe /online /cleanup-image /startcomponentcleanup /resetbase", false);
+        std::cout << CleanerCore::C_CYAN << " [*] Đang thực thi DISM Component Cleanup... Có thể mất vài phút...\n" << CleanerCore::C_RESET;
+        if (!CleanerCore::runCommand(
+                "dism.exe /online /cleanup-image /startcomponentcleanup", false)) {
+            stats.errorsCount++;
+        }
     }
 
     return stats;

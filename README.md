@@ -86,7 +86,7 @@ Hệ thống được chia thành **5 nhóm module chuyên biệt**, mỗi nhóm
 * **Kernel Dumps & Log hệ thống**:
   * BSOD Crash Dumps: `MEMORY.DMP`, `%SystemRoot%\Minidump`.
   * Log lỗi và cài đặt: `%SystemRoot%\Panther`, `LiveKernelReports`, `Logs\CBS`, `Logs\DISM`, `WindowsUpdate.log`.
-* **DISM WinSxS Component Store (Tùy chọn)**: Hỗ trợ dọn dẹp các phiên bản component cũ trong WinSxS bằng lệnh `dism.exe /online /cleanup-image /startcomponentcleanup /resetbase`.
+* **DISM WinSxS Component Store**: Dọn các component cũ bằng `/startcomponentcleanup`; không dùng `/resetbase` để vẫn có thể gỡ bản cập nhật khi cần.
 
 ---
 
@@ -137,7 +137,7 @@ Hệ thống được chia thành **5 nhóm module chuyên biệt**, mỗi nhóm
 * **QUY TẮC GIỮ FILE**:
   * ✅ **GIỮ LẠI:** File gốc (`file.ext` - chỉ số 0).
   * ✅ **GIỮ LẠI:** File có chỉ số cao nhất nếu có bản sao (`file (5).ext` - chỉ số cao nhất $N_{max}$).
-  * 🗑️ **CHUYỂN VÀO THÙNG RÁC:** Toàn bộ các bản sao trung gian ở giữa (`file (1).ext`, `file (2).ext`...).
+  * 🗑️ **CHUYỂN VÀO THÙNG RÁC:** Chỉ các bản sao trung gian có nội dung nhị phân giống hệt một trong các bản được giữ lại.
   * *(Nếu không có file gốc mà chỉ có các bản sao $(1), (2), (5)$... thì giữ bản sao đầu tiên $(1)$ và bản sao cao nhất $(5)$)*.
 
 ---
@@ -157,7 +157,7 @@ Script sẽ tự động dò tìm `g++` trong PATH hoặc MSYS2, biên dịch to
 
 ### 2. Biên Dịch Thủ Công Bằng Dòng Lệnh
 ```bash
-g++ -std=c++17 -O3 -Iinclude src\*.cpp -lshlwapi -lshell32 -lole32 -ladvapi32 -lversion -luuid -static-libgcc -static-libstdc++ -static -s -o bin\cleaner.exe
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Iinclude src\*.cpp -lshell32 -lole32 -ladvapi32 -lversion -luuid -static -s -o bin\cleaner.exe
 ```
 
 ### 3. Cách Sử Dụng Chương Trình
@@ -166,27 +166,36 @@ g++ -std=c++17 -O3 -Iinclude src\*.cpp -lshlwapi -lshell32 -lole32 -ladvapi32 -l
 ```cmd
 bin\cleaner.exe
 ```
-Menu gồm 8 chức năng trực quan:
-* `[1]`: Quét & Phân tích rác toàn hệ thống (Dry-run, không xóa).
-* `[2]`: Dọn rác nhanh (Temp, Prefetch & Log người dùng).
-* `[3]`: Dọn Cache trình duyệt & Chat Apps.
-* `[4]`: Dọn hệ thống chuyên sâu & Windows Update (cần Admin).
-* `[5]`: Dọn rác môi trường lập trình (Python, Node, Gradle, IDEs...).
-* `[6]`: Dọn thông minh Downloads (Ảnh, Video, Exe trùng lặp).
-* `[7]`: Dọn dẹp TOÀN DIỆN (Thực thi toàn bộ các phân hệ).
-* `[8]`: Tự khởi động lại chương trình với quyền Administrator qua UAC.
+Menu chính được rút gọn thành luồng một nút:
+
+* `[1] CHẠY DỌN DẸP TỰ ĐỘNG`: tự kiểm tra lần lượt Temp/Recycle Bin, cache trình duyệt,
+  rác hệ thống, cache môi trường lập trình và Downloads. Tiêu chí trống được bỏ qua;
+  kết quả xóa thật được cập nhật trực tiếp lên dashboard.
+* `[2] THOÁT`: đóng chương trình.
+
+Luồng tự động chạy thẳng từng tiêu chí và cập nhật tổng dung lượng đã xóa. Không còn bước
+quét dự đoán. Quét sâu source tree và DISM Component Cleanup an toàn đều chạy trong luồng này.
 
 #### Chạy trực tiếp qua tham số dòng lệnh (Headless / Silent):
 | Lệnh | Ý nghĩa |
 | :--- | :--- |
-| `bin\cleaner.exe --scan` | Quét phân tích tính toán dung lượng rác (không xóa) |
 | `bin\cleaner.exe --all` | Thực thi dọn dẹp toàn bộ tất cả các phân hệ |
 | `bin\cleaner.exe --temp` | Chỉ dọn file tạm và cache cơ bản |
 | `bin\cleaner.exe --browser` | Chỉ dọn cache trình duyệt và chat apps |
 | `bin\cleaner.exe --system` | Chỉ dọn hệ thống chuyên sâu & Windows Update |
 | `bin\cleaner.exe --dev` | Chỉ dọn rác môi trường dev (Python, Node...) |
 | `bin\cleaner.exe --downloads` | Chỉ dọn bộ cài, ảnh, video trùng trong Downloads |
+| `bin\cleaner.exe --auto` | Chạy trực tiếp luồng tự động và dashboard |
 | `bin\cleaner.exe --help` | Xem bảng trợ giúp tham số |
+
+### 4. Kiểm Thử An Toàn
+
+Bộ test lõi chỉ tạo và xóa dữ liệu trong một thư mục tạm riêng, không đụng tới file người dùng:
+
+```cmd
+g++ -std=c++17 -O0 -g -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Iinclude tests\CleanerCoreTests.cpp src\CleanerCore.cpp -lshell32 -ladvapi32 -static -o bin\cleaner_core_tests.exe
+bin\cleaner_core_tests.exe
+```
 
 ---
 

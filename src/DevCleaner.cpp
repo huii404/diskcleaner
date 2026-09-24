@@ -1,13 +1,10 @@
 #include "DevCleaner.h"
-#include <iostream>
 #include <vector>
 #include <string>
 #include <unordered_set>
 
 std::vector<fs::path> DevCleaner::detectDevScanRoots() {
     std::vector<fs::path> scanRoots;
-    fs::path currentRoot = fs::current_path();
-    scanRoots.push_back(currentRoot);
 
     char* userProfileEnv = std::getenv("USERPROFILE");
     std::string baseUser = userProfileEnv ? std::string(userProfileEnv) : "";
@@ -47,6 +44,9 @@ std::vector<fs::path> DevCleaner::detectDevScanRoots() {
                 bool dup = false;
                 for (const auto& sr : scanRoots) {
                     if (fs::equivalent(sr, uPath, ec)) { dup = true; break; }
+                    ec.clear();
+                    fs::path rel = uPath.lexically_relative(sr);
+                    if (!rel.empty() && *rel.begin() != "..") { dup = true; break; }
                 }
                 if (!dup) scanRoots.push_back(uPath);
             }
@@ -130,7 +130,7 @@ int DevCleaner::cleanDirectoryArtifacts(const fs::path& rootPath,
     return deletedCount;
 }
 
-CleanStats DevCleaner::clean(bool dryRun) {
+CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
     CleanStats stats;
 
     char* localAppEnv = std::getenv("LOCALAPPDATA");
@@ -140,8 +140,6 @@ CleanStats DevCleaner::clean(bool dryRun) {
     std::string baseLocal = localAppEnv ? std::string(localAppEnv) : "";
     std::string baseApp   = appEnv ? std::string(appEnv) : "";
     std::string baseUser  = userProfileEnv ? std::string(userProfileEnv) : "";
-
-    std::vector<fs::path> scanRoots = detectDevScanRoots();
 
     // 1. Python Caches (pip)
     if (!baseLocal.empty()) {
@@ -168,16 +166,20 @@ CleanStats DevCleaner::clean(bool dryRun) {
         CleanerCore::wipeFolderContents(baseUser + "\\.pnpm-store", dryRun, stats);
     }
 
-    // Quét dự án (Python & Web build/cache) trên scanRoots trong 1 lần duyệt duy nhất để tiết kiệm 50% I/O
-    std::vector<std::string> devTargetFolders = {
-        "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
-        ".turbo", ".parcel-cache", ".next", ".nuxt", ".vite"
-    };
-    std::vector<std::string> devTargetExts = {
-        ".pyc", ".pyo"
-    };
-    for (const auto& sr : scanRoots) {
-        cleanDirectoryArtifacts(sr, devTargetFolders, devTargetExts, dryRun, stats);
+    // Quét project là chế độ chuyên sâu vì bắt buộc phải duyệt cây thư mục.
+    // Luồng tự động bỏ qua bước này để khởi động nhanh và tránh quét toàn bộ source tree.
+    if (scanProjects) {
+        std::vector<fs::path> scanRoots = detectDevScanRoots();
+        std::vector<std::string> devTargetFolders = {
+            "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
+            ".turbo", ".parcel-cache", ".next", ".nuxt", ".vite"
+        };
+        std::vector<std::string> devTargetExts = {
+            ".pyc", ".pyo"
+        };
+        for (const auto& sr : scanRoots) {
+            cleanDirectoryArtifacts(sr, devTargetFolders, devTargetExts, dryRun, stats);
+        }
     }
 
     // 3. Java Gradle & Android

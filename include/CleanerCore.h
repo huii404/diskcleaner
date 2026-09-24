@@ -6,8 +6,6 @@
 #include <vector>
 #include <filesystem>
 
-#include <iostream>
-
 namespace fs = std::filesystem;
 
 // Kết quả và thống kê của một tác vụ dọn dẹp
@@ -17,6 +15,7 @@ struct CleanStats {
     int filesDeleted = 0;
     int filesRecycled = 0;
     int dirsDeleted = 0;
+    int itemsSkipped = 0;
     int errorsCount = 0;
 
     void add(const CleanStats& other) {
@@ -25,6 +24,7 @@ struct CleanStats {
         filesDeleted += other.filesDeleted;
         filesRecycled += other.filesRecycled;
         dirsDeleted += other.dirsDeleted;
+        itemsSkipped += other.itemsSkipped;
         errorsCount += other.errorsCount;
     }
 };
@@ -37,15 +37,11 @@ public:
     static const char* C_RED;
     static const char* C_GREEN;
     static const char* C_YELLOW;
-    static const char* C_BLUE;
     static const char* C_CYAN;
-    static const char* C_MAGENTA;
-    static const char* C_WHITE;
 
     static void initConsole();
     static void cls();
     static void waitEnter();
-    static bool confirm(const std::string& prompt, bool defaultYes = false);
     static std::string trim(const std::string& str);
     static std::string toLower(const std::string& str);
     static std::string formatSize(long long bytes);
@@ -58,8 +54,6 @@ public:
 
     // Tác vụ thực thi dòng lệnh an toàn
     static bool runCommand(const std::string& cmd, bool hideWindow = true);
-    static bool runAdminCommand(const std::string& cmd, bool silent = false);
-
     // Kiểm tra đường dẫn nguy hiểm - KHÔNG BAO GIỜ xóa thư mục gốc hệ thống
     static bool isCriticalPath(const fs::path& p);
 
@@ -76,7 +70,6 @@ public:
 
     // So sánh nhị phân 2 file để phát hiện trùng lặp chính xác
     static bool filesHaveSameContent(const fs::path& first, const fs::path& second);
-    static uintmax_t calculateDirectorySize(const fs::path& dirPath);
 };
 
 #endif // CLEANER_CORE_H

@@ -20,16 +20,14 @@ enum class CleanScope {
 class DiskCleaner {
 public:
     static void printBanner();
-    static void printScopePreview(CleanScope scope, bool dryRun);
-
     // Chạy dọn dẹp theo phạm vi cụ thể
     static CleanStats runScope(CleanScope scope, bool dryRun);
 
     // Chạy toàn diện (tất cả các module)
     static CleanStats runAll(bool dryRun);
 
-    // Quét phân tích toàn diện không xóa (Dry-Run / Scan Only)
-    static void runScanAnalysis();
+    // Luồng một nút: tự kiểm tra, dọn từng tiêu chí và cập nhật dashboard.
+    static void runAutomaticCleanup(bool waitAtEnd = true);
 
     // Menu tương tác người dùng
     static void runInteractiveMenu();

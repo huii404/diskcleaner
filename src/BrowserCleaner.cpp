@@ -40,6 +40,15 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
         std::error_code ec;
         if (!fs::exists(baseDir, ec)) continue;
 
+        // Opera dùng chính "Opera Stable/GX Stable" làm profile root thay vì
+        // đặt cache dưới Default/Profile N như Chrome và Edge.
+        std::string baseName = baseDir.filename().string();
+        if (baseName == "Opera Stable" || baseName == "Opera GX Stable") {
+            for (const auto& cacheName : cacheFolderNames) {
+                CleanerCore::wipeFolderContents(baseDir / cacheName, dryRun, stats);
+            }
+        }
+
         try {
             for (const auto& entry : fs::directory_iterator(baseDir, fs::directory_options::skip_permission_denied, ec)) {
                 if (ec) { ec.clear(); continue; }

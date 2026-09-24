@@ -10,7 +10,7 @@
  * - Xóa tồn dư cài đặt/nâng cấp Windows cũ: C:\Windows.old, C:\$WINDOWS.~BT, C:\$WINDOWS.~WS
  * - Log cài đặt & lỗi hệ thống: Panther, LiveKernelReports, Minidump, MEMORY.DMP, CBS, DISM, WindowsUpdate.log
  * - Cache giao hàng cập nhật (DeliveryOptimization Cache)
- * - Tùy chọn chạy DISM Component Cleanup (/online /cleanup-image /startcomponentcleanup /resetbase)
+ * - Tùy chọn chạy DISM Component Cleanup an toàn (/online /cleanup-image /startcomponentcleanup)
  */
 class SystemDeepCleaner {
 public:

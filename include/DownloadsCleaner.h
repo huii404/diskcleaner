@@ -29,7 +29,8 @@
  * 3. CƠ CHẾ DỌN FILE TRÙNG LẶP (.exe, .msi, ảnh, video):
  *    - Nhận diện các bản sao được Windows đánh số: file (1).ext, file (2).ext, file (5).ext
  *    - Quy tắc giữ file: CHỈ GIỮ file gốc (file.ext) VÀ file có chỉ số cao nhất (file (5).ext)
- *    - Toàn bộ các file bản sao ở giữa (file (1), file (2)...) được chuyển vào Thùng rác.
+ *    - Chỉ chuyển bản sao ở giữa vào Thùng rác khi nội dung nhị phân giống hệt
+ *      một trong các bản được giữ lại.
  */
 class DownloadsCleaner {
 private:

@@ -64,7 +64,10 @@ CleanStats TempCleaner::clean(bool dryRun) {
         CleanerCore::wipeFolderContents(progData + "\\Microsoft\\Windows\\WER\\Temp", dryRun, stats);
     }
 
-    // 6. Xóa sạch cache phân giải tên miền DNS
+    // 6. Làm rỗng Thùng rác cho phạm vi dọn nhanh và dọn toàn bộ.
+    CleanerCore::emptyRecycleBin(dryRun, stats);
+
+    // 7. Xóa sạch cache phân giải tên miền DNS
     if (!dryRun) {
         CleanerCore::flushDns();
     }
