@@ -1,0 +1,12 @@
+# Binaries and build outputs
+/bin/
+*.exe
+*.o
+*.obj
+*.log
+
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.tmp
