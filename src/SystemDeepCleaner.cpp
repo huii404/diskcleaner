@@ -18,17 +18,31 @@ CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
 
     // 1. Dọn dẹp cache tải về của Windows Update
     std::string wuDownloadPath = sysRoot + "\\SoftwareDistribution\\Download";
+    
+    // RAII Scope Guard: Đảm bảo các dịch vụ cập nhật luôn được khôi phục dù có sự cố xảy ra
+    struct WuServiceGuard {
+        bool shouldRestart = false;
+        ~WuServiceGuard() {
+            if (shouldRestart) {
+                CleanerCore::runCommand("net start bits >nul 2>&1", true);
+                CleanerCore::runCommand("net start wuauserv >nul 2>&1", true);
+            }
+        }
+    } wuGuard;
+
     if (!dryRun) {
         // Tạm dừng dịch vụ Windows Update để tránh file locked
         CleanerCore::runCommand("net stop wuauserv >nul 2>&1", true);
         CleanerCore::runCommand("net stop bits >nul 2>&1", true);
+        wuGuard.shouldRestart = true;
     }
 
     CleanerCore::wipeFolderContents(wuDownloadPath, dryRun, stats);
 
-    if (!dryRun) {
+    if (wuGuard.shouldRestart) {
         CleanerCore::runCommand("net start bits >nul 2>&1", true);
         CleanerCore::runCommand("net start wuauserv >nul 2>&1", true);
+        wuGuard.shouldRestart = false; // Đã start thành công, tránh chạy lại trong destructor
     }
 
     // 2. Dọn Delivery Optimization Cache

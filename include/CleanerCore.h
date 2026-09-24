@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
-#include <functional>
+
 #include <iostream>
 
 namespace fs = std::filesystem;
@@ -18,7 +18,6 @@ struct CleanStats {
     int filesRecycled = 0;
     int dirsDeleted = 0;
     int errorsCount = 0;
-    std::vector<std::string> messages;
 
     void add(const CleanStats& other) {
         bytesFreed += other.bytesFreed;
@@ -27,7 +26,6 @@ struct CleanStats {
         filesRecycled += other.filesRecycled;
         dirsDeleted += other.dirsDeleted;
         errorsCount += other.errorsCount;
-        messages.insert(messages.end(), other.messages.begin(), other.messages.end());
     }
 };
 
@@ -61,6 +59,9 @@ public:
     // Tác vụ thực thi dòng lệnh an toàn
     static bool runCommand(const std::string& cmd, bool hideWindow = true);
     static bool runAdminCommand(const std::string& cmd, bool silent = false);
+
+    // Kiểm tra đường dẫn nguy hiểm - KHÔNG BAO GIỜ xóa thư mục gốc hệ thống
+    static bool isCriticalPath(const fs::path& p);
 
     // Tác vụ File & Thư mục an toàn
     static bool wipeFolderContents(const fs::path& dirPath, bool dryRun, CleanStats& stats);

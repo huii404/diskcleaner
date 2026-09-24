@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <unordered_set>
 
 std::vector<fs::path> DevCleaner::detectDevScanRoots() {
     std::vector<fs::path> scanRoots;
@@ -142,18 +143,12 @@ CleanStats DevCleaner::clean(bool dryRun) {
 
     std::vector<fs::path> scanRoots = detectDevScanRoots();
 
-    // 1. Python Caches
+    // 1. Python Caches (pip)
     if (!baseLocal.empty()) {
         CleanerCore::wipeFolderContents(baseLocal + "\\pip\\cache", dryRun, stats);
     }
-    for (const auto& sr : scanRoots) {
-        cleanDirectoryArtifacts(sr,
-            {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox"},
-            {".pyc", ".pyo"},
-            dryRun, stats);
-    }
 
-    // 2. Node.js / JavaScript / Web Caches
+    // 2. Node.js / JavaScript / Web Caches (global cache folders)
     if (!baseLocal.empty()) {
         CleanerCore::wipeFolderContents(baseLocal + "\\npm-cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\Yarn\\Cache", dryRun, stats);
@@ -172,8 +167,17 @@ CleanStats DevCleaner::clean(bool dryRun) {
         CleanerCore::wipeFolderContents(baseUser + "\\.yarn", dryRun, stats);
         CleanerCore::wipeFolderContents(baseUser + "\\.pnpm-store", dryRun, stats);
     }
+
+    // Quét dự án (Python & Web build/cache) trên scanRoots trong 1 lần duyệt duy nhất để tiết kiệm 50% I/O
+    std::vector<std::string> devTargetFolders = {
+        "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
+        ".turbo", ".parcel-cache", ".next", ".nuxt", ".vite"
+    };
+    std::vector<std::string> devTargetExts = {
+        ".pyc", ".pyo"
+    };
     for (const auto& sr : scanRoots) {
-        cleanDirectoryArtifacts(sr, {".turbo", ".parcel-cache", ".cache"}, {}, dryRun, stats);
+        cleanDirectoryArtifacts(sr, devTargetFolders, devTargetExts, dryRun, stats);
     }
 
     // 3. Java Gradle & Android

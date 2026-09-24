@@ -1,10 +1,10 @@
 #include "DownloadsCleaner.h"
 #include <iostream>
+#include <cstdio>
 #include <vector>
 #include <map>
 #include <regex>
 #include <algorithm>
-#include <chrono>
 #include <shlobj.h>
 
 bool DownloadsCleaner::isCorruptDownload(const std::string& ext) {
@@ -32,10 +32,15 @@ bool DownloadsCleaner::isSupportedVideo(const std::string& ext) {
 std::string DownloadsCleaner::getDownloadsPath() {
     PWSTR path = NULL;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Downloads, 0, NULL, &path))) {
-        char buf[MAX_PATH];
-        WideCharToMultiByte(CP_UTF8, 0, path, -1, buf, MAX_PATH, NULL, NULL);
+        int reqSize = WideCharToMultiByte(CP_UTF8, 0, path, -1, NULL, 0, NULL, NULL);
+        std::string res;
+        if (reqSize > 0) {
+            std::vector<char> buf(reqSize);
+            WideCharToMultiByte(CP_UTF8, 0, path, -1, buf.data(), reqSize, NULL, NULL);
+            res = buf.data();
+        }
         CoTaskMemFree(path);
-        return std::string(buf);
+        if (!res.empty()) return res;
     }
     const char *userProf = getenv("USERPROFILE");
     if (userProf) return std::string(userProf) + "\\Downloads";
@@ -248,7 +253,7 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
     };
 
     // Regex phát hiện bản sao Windows: "filename (1).ext", "filename (2).ext"
-    std::regex dupRegex(R"(^(.+?)\s*\(([0-9]+)\)\.([a-zA-Z0-9]+)$)", std::regex::icase);
+    static const std::regex dupRegex(R"(^(.+?)\s*\(([0-9]+)\)\.([a-zA-Z0-9]+)$)", std::regex::icase);
     std::map<std::string, std::vector<DownloadFileItem>> groups;
 
     for (const auto &entry : fs::directory_iterator(dlPath, fs::directory_options::skip_permission_denied, ec)) {

@@ -103,6 +103,44 @@ long long CleanerCore::getAvailableDiskSpace(const std::string& drivePath) {
     return static_cast<long long>(spaceInfo.available);
 }
 
+bool CleanerCore::isCriticalPath(const fs::path& p) {
+    std::error_code ec;
+    // Không cho xóa đường dẫn gốc ổ đĩa (X:\ hoặc X:)
+    std::string pathStr = p.string();
+    if (pathStr.size() <= 3) return true;
+
+    // Cache danh sách các đường dẫn hệ thống quan trọng để tránh gọi GetLogicalDrives() và tính toán lại
+    static const std::vector<fs::path> criticalList = []() {
+        std::vector<fs::path> list;
+        std::string sysDriveStr = getSystemDriveRoot();
+        fs::path sysDrive(sysDriveStr);
+
+        static const std::vector<std::wstring> blocked = {
+            L"Windows", L"Windows\\System32", L"Windows\\SysWOW64",
+            L"Users", L"Program Files", L"Program Files (x86)",
+            L"ProgramData", L"Recovery", L"System Volume Information"
+        };
+        for (const auto& b : blocked) {
+            list.push_back(sysDrive / b);
+        }
+
+        DWORD driveMask = GetLogicalDrives();
+        for (char c = 'A'; c <= 'Z'; ++c) {
+            if (driveMask & (1 << (c - 'A'))) {
+                list.push_back(fs::path(std::string(1, c) + ":\\"));
+            }
+        }
+        return list;
+    }();
+
+    for (const auto& critical : criticalList) {
+        if (fs::equivalent(p, critical, ec)) return true;
+        if (ec) ec.clear();
+    }
+
+    return false;
+}
+
 bool CleanerCore::isElevated() {
     bool elevated = false;
     HANDLE hToken = NULL;
@@ -187,12 +225,20 @@ bool CleanerCore::wipeFolderContents(const fs::path& dirPath, bool dryRun, Clean
     std::error_code ec;
     if (!fs::exists(dirPath, ec)) return true;
 
+    // BẢO VỆ AN TOÀN: Tuyệt đối không xóa thư mục gốc hệ thống
+    if (isCriticalPath(dirPath)) {
+        std::cout << C_RED << " [CHẶN] Từ chối xóa đường dẫn nguy hiểm: " << dirPath.string() << C_RESET << "\n";
+        stats.errorsCount++;
+        return false;
+    }
+
     try {
         for (const auto& entry : fs::directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec)) {
             if (ec) { ec.clear(); continue; }
             try {
                 if (entry.is_regular_file(ec)) {
                     uintmax_t sz = entry.file_size(ec);
+                    if (ec) { sz = 0; ec.clear(); }
                     if (dryRun) {
                         stats.bytesFreed += sz;
                         stats.filesDeleted++;
@@ -206,15 +252,8 @@ bool CleanerCore::wipeFolderContents(const fs::path& dirPath, bool dryRun, Clean
                         }
                     }
                 } else if (entry.is_directory(ec)) {
-                    uintmax_t dirSz = calculateDirectorySize(entry.path());
-                    if (dryRun) {
-                        stats.bytesFreed += dirSz;
-                        stats.dirsDeleted++;
-                    } else {
-                        if (forceDeleteFolder(entry.path(), false, stats)) {
-                            // stats updated in forceDeleteFolder
-                        }
-                    }
+                    // Gọi forceDeleteFolder — hàm này tự tính size và cập nhật stats
+                    forceDeleteFolder(entry.path(), dryRun, stats);
                 }
             } catch (...) {
                 stats.errorsCount++;
@@ -231,21 +270,36 @@ bool CleanerCore::forceDeleteFolder(const fs::path& dirPath, bool dryRun, CleanS
     std::error_code ec;
     if (!fs::exists(dirPath, ec)) return true;
 
-    uintmax_t dirSz = calculateDirectorySize(dirPath);
+    // BẢO VỆ AN TOÀN: Tuyệt đối không xóa thư mục gốc hệ thống
+    if (isCriticalPath(dirPath)) {
+        std::cout << C_RED << " [CHẶN] Từ chối xóa đường dẫn nguy hiểm: " << dirPath.string() << C_RESET << "\n";
+        stats.errorsCount++;
+        return false;
+    }
+
+    // Gộp tính size và gỡ Read-Only vào 1 pass duy nhất (tiết kiệm đáng kể I/O trên cây thư mục lớn)
+    uintmax_t dirSz = 0;
+    try {
+        for (auto it = fs::recursive_directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec);
+             it != fs::recursive_directory_iterator();) {
+            if (ec) { ec.clear(); try { it++; } catch (...) { break; } continue; }
+            if (it->is_regular_file(ec)) {
+                uintmax_t sz = it->file_size(ec);
+                if (!ec) dirSz += sz;
+                else ec.clear();
+            }
+            if (!dryRun) {
+                SetFileAttributesW(it->path().c_str(), FILE_ATTRIBUTE_NORMAL);
+            }
+            it.increment(ec);
+        }
+    } catch (...) {}
+
     if (dryRun) {
         stats.bytesFreed += dirSz;
         stats.dirsDeleted++;
         return true;
     }
-
-    try {
-        for (auto it = fs::recursive_directory_iterator(dirPath, fs::directory_options::skip_permission_denied, ec);
-             it != fs::recursive_directory_iterator();) {
-            if (ec) { ec.clear(); try { it++; } catch (...) { break; } continue; }
-            SetFileAttributesW(it->path().c_str(), FILE_ATTRIBUTE_NORMAL);
-            it.increment(ec);
-        }
-    } catch (...) {}
 
     SetFileAttributesW(dirPath.c_str(), FILE_ATTRIBUTE_NORMAL);
     fs::remove_all(dirPath, ec);
@@ -255,9 +309,11 @@ bool CleanerCore::forceDeleteFolder(const fs::path& dirPath, bool dryRun, CleanS
         return true;
     }
 
-    // Fallback: lệnh cmd rd /s /q
-    std::string cmd = "cmd.exe /d /c \"rd /s /q \"" + dirPath.string() + "\"\" >nul 2>&1";
-    runCommand(cmd, true);
+    // Fallback: Re-check isCriticalPath trước khi gọi shell command rd /s /q
+    if (!isCriticalPath(dirPath)) {
+        std::string cmd = "cmd.exe /d /c \"rd /s /q \"" + dirPath.string() + "\"\" >nul 2>&1";
+        runCommand(cmd, true);
+    }
 
     if (!fs::exists(dirPath, ec)) {
         stats.bytesFreed += dirSz;
@@ -273,6 +329,7 @@ bool CleanerCore::safeDeleteFile(const fs::path& filePath, bool dryRun, CleanSta
     std::error_code ec;
     if (!fs::exists(filePath, ec)) return true;
     uintmax_t sz = fs::file_size(filePath, ec);
+    if (ec) { sz = 0; ec.clear(); }
     if (dryRun) {
         stats.bytesFreed += sz;
         stats.filesDeleted++;
@@ -293,6 +350,7 @@ bool CleanerCore::moveToRecycleBin(const fs::path& filePath, bool dryRun, CleanS
     std::error_code ec;
     if (!fs::exists(filePath, ec)) return true;
     uintmax_t sz = fs::file_size(filePath, ec);
+    if (ec) { sz = 0; ec.clear(); }
 
     if (dryRun) {
         stats.bytesRecycled += sz;
@@ -354,12 +412,31 @@ bool CleanerCore::flushDns() {
 }
 
 bool CleanerCore::takeOwnershipAndGrantAdmin(const fs::path& targetPath) {
+    // Whitelist bảo vệ an toàn: chỉ cho phép chiếm quyền trên các thư mục nâng cấp hệ thống đã biết
     std::string pathStr = targetPath.string();
+    std::string sysDrive = getSystemDriveRoot();
+    std::vector<std::string> allowedPrefixes = {
+        sysDrive + "$WINDOWS.~BT",
+        sysDrive + "$WINDOWS.~WS",
+        sysDrive + "Windows.old"
+    };
+    bool allowed = false;
+    for (const auto& prefix : allowedPrefixes) {
+        if (pathStr.rfind(prefix, 0) == 0) { // starts_with
+            allowed = true;
+            break;
+        }
+    }
+    if (!allowed) {
+        std::cout << C_RED << " [CHẶN] takeOwnership từ chối thực thi trên đường dẫn không thuộc whitelist an toàn: " << pathStr << C_RESET << "\n";
+        return false;
+    }
+
     std::string cmdTake = "takeown /F \"" + pathStr + "\" /A /R /D Y >nul 2>&1";
     std::string cmdAcl  = "icacls \"" + pathStr + "\" /grant *S-1-5-32-544:F /T /C /Q >nul 2>&1";
-    runCommand(cmdTake, true);
-    runCommand(cmdAcl, true);
-    return true;
+    bool ok1 = runCommand(cmdTake, true);
+    bool ok2 = runCommand(cmdAcl, true);
+    return ok1 || ok2; // Ít nhất 1 lệnh thành công mới coi là thành công
 }
 
 bool CleanerCore::filesHaveSameContent(const fs::path& first, const fs::path& second) {

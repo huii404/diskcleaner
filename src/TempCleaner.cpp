@@ -1,7 +1,6 @@
 #include "TempCleaner.h"
 #include <iostream>
 #include <vector>
-#include <thread>
 
 CleanStats TempCleaner::clean(bool dryRun) {
     CleanStats stats;
@@ -37,7 +36,7 @@ CleanStats TempCleaner::clean(bool dryRun) {
     // 4. Caches đồ họa & Bảo mật Windows
     if (!localApp.empty()) {
         CleanerCore::wipeFolderContents(localApp + "\\D3DSCache", dryRun, stats);
-        CleanerCore::wipeFolderContents(localApp + "Low\\Microsoft\\CryptnetUrlCache", dryRun, stats);
+        CleanerCore::wipeFolderContents(localApp + "\\Low\\Microsoft\\CryptnetUrlCache", dryRun, stats);
         CleanerCore::wipeFolderContents(localApp + "\\CrashDumps", dryRun, stats);
         CleanerCore::wipeFolderContents(localApp + "\\Microsoft\\Windows\\WER\\Temp", dryRun, stats);
         CleanerCore::wipeFolderContents(localApp + "\\Microsoft\\Windows\\WER\\ReportArchive", dryRun, stats);
