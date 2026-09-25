@@ -63,6 +63,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    DiskCleaner::runInteractiveMenu();
+    if (!CleanerCore::isElevated() && CleanerCore::restartAsAdmin("--auto")) {
+        return 0;
+    }
+    DiskCleaner::runAutomaticCleanup(true);
     return 0;
 }

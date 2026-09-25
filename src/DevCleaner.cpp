@@ -155,9 +155,13 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
         CleanerCore::wipeFolderContents(baseLocal + "\\electron\\Cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\Microsoft\\TypeScript", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\deno\\deps", dryRun, stats);
+        // Bun — JavaScript runtime & package manager
+        CleanerCore::wipeFolderContents(baseLocal + "\\bun\\install\\cache", dryRun, stats);
     }
     if (!baseApp.empty()) {
         CleanerCore::wipeFolderContents(baseApp + "\\npm-cache", dryRun, stats);
+        // Composer — PHP package manager
+        CleanerCore::wipeFolderContents(baseApp + "\\Composer\\cache", dryRun, stats);
     }
     if (!baseUser.empty()) {
         CleanerCore::wipeFolderContents(baseUser + "\\.turbo", dryRun, stats);
@@ -172,7 +176,12 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
         std::vector<fs::path> scanRoots = detectDevScanRoots();
         std::vector<std::string> devTargetFolders = {
             "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
-            ".turbo", ".parcel-cache", ".next", ".nuxt", ".vite"
+            ".turbo", ".parcel-cache", ".next", ".nuxt", ".vite",
+            // CMake — thư mục build artifact phổ biến
+            "build", "cmake-build-debug", "cmake-build-release",
+            "cmake-build-relwithdebinfo", "cmake-build-minsizerel",
+            // Swift — thư mục build của SPM
+            ".build"
         };
         std::vector<std::string> devTargetExts = {
             ".pyc", ".pyo"
@@ -200,10 +209,14 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
     if (!baseLocal.empty()) {
         CleanerCore::wipeFolderContents(baseLocal + "\\NuGet\\v3-cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseLocal + "\\go-build", dryRun, stats);
+        // vcpkg — C/C++ package manager (binary cache)
+        CleanerCore::wipeFolderContents(baseLocal + "\\vcpkg\\archives", dryRun, stats);
     }
     if (!baseUser.empty()) {
         CleanerCore::wipeFolderContents(baseUser + "\\.cargo\\registry\\cache", dryRun, stats);
         CleanerCore::wipeFolderContents(baseUser + "\\.rustup\\downloads", dryRun, stats);
+        // Swift Package Manager cache
+        CleanerCore::wipeFolderContents(baseUser + "\\.swiftpm\\cache", dryRun, stats);
     }
 
     return stats;

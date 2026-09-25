@@ -70,12 +70,8 @@ CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
 
     CleanerCore::wipeFolderContents(wuDownloadPath, dryRun, stats);
 
-    if (wuGuard.restartBits && CleanerCore::runCommand("net start bits >nul 2>&1", true)) {
-        wuGuard.restartBits = false;
-    }
-    if (wuGuard.restartWuauserv && CleanerCore::runCommand("net start wuauserv >nul 2>&1", true)) {
-        wuGuard.restartWuauserv = false;
-    }
+    // Không restart service thủ công ở đây — RAII WuServiceGuard destructor
+    // sẽ tự restart đúng lúc khi hàm này kết thúc (sau tất cả các bước dọn).
 
     // 2. Dọn Delivery Optimization Cache
     CleanerCore::wipeFolderContents(progData + "\\Microsoft\\Windows\\DeliveryOptimization\\Cache", dryRun, stats);
@@ -125,7 +121,8 @@ CleanStats SystemDeepCleaner::clean(bool dryRun, bool runDismCleanup) {
     if (runDismCleanup && !dryRun) {
         std::cout << CleanerCore::C_CYAN << " [*] Đang thực thi DISM Component Cleanup... Có thể mất vài phút...\n" << CleanerCore::C_RESET;
         if (!CleanerCore::runCommand(
-                "dism.exe /online /cleanup-image /startcomponentcleanup", false)) {
+                "dism.exe /online /cleanup-image /startcomponentcleanup", false,
+                CleanerCore::DISM_CMD_TIMEOUT_MS)) {
             stats.errorsCount++;
         }
     }

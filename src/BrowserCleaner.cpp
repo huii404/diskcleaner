@@ -44,12 +44,16 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
         // Opera dùng chính "Opera Stable/GX Stable" làm profile root thay vì
         // đặt cache dưới Default/Profile N như Chrome và Edge.
         std::string baseName = baseDir.filename().string();
-        if (baseName == "Opera Stable" || baseName == "Opera GX Stable") {
+        bool isOpera = (baseName == "Opera Stable" || baseName == "Opera GX Stable");
+        if (isOpera) {
             for (const auto& cacheName : cacheFolderNames) {
                 CleanerCore::wipeFolderContents(baseDir / cacheName, dryRun, stats);
             }
         }
 
+        // Với Opera đã xử lý xong ở trên — bỏ qua vòng lặp profile để
+        // tránh double-wipe các thư mục ShaderCache, GrShaderCache, DawnCache.
+        if (!isOpera) {
         try {
             for (const auto& entry : fs::directory_iterator(baseDir, fs::directory_options::skip_permission_denied, ec)) {
                 if (ec) { ec.clear(); continue; }
@@ -73,6 +77,7 @@ CleanStats BrowserCleaner::clean(bool dryRun) {
                 }
             }
         } catch (...) {}
+        } // end if (!isOpera)
     }
 
     // 2. Mozilla Firefox (Roaming & Local)
