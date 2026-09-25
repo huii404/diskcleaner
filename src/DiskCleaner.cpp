@@ -75,7 +75,7 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
     }
 
     if (scope == CleanScope::BrowserAndApps || scope == CleanScope::All) {
-        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Cache trình duyệt (Chromium/Gecko) & Chat apps...\n" << CleanerCore::C_RESET;
+        std::cout << CleanerCore::C_CYAN << " [*] Đang xử lý: Cache trình duyệt & Zalo PC...\n" << CleanerCore::C_RESET;
         CleanStats s = BrowserCleaner::clean(dryRun);
         total.add(s);
         std::cout << "     └── Đã tìm thấy/giải phóng: " << CleanerCore::C_GREEN << CleanerCore::formatSize(s.bytesFreed) << CleanerCore::C_RESET
@@ -123,7 +123,7 @@ CleanStats DiskCleaner::runAll(bool dryRun) {
 void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     std::vector<AutoStageResult> stages = {
         {"Temp, cache cơ bản & Thùng rác", {}},
-        {"Cache trình duyệt & ứng dụng", {}},
+        {"Cache trình duyệt & Zalo PC", {}},
         {"Rác hệ thống, Windows Update & Component Store", {}},
         {"Cache và build artifacts môi trường lập trình", {}},
         {"Downloads thông minh", {}}
