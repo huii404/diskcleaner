@@ -1,7 +1,6 @@
 #include "DevCleaner.h"
 #include <vector>
 #include <string>
-#include <unordered_set>
 
 std::vector<fs::path> DevCleaner::detectDevScanRoots() {
     std::vector<fs::path> scanRoots;
@@ -178,7 +177,7 @@ CleanStats DevCleaner::clean(bool dryRun, bool scanProjects) {
             "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
             ".turbo", ".parcel-cache", ".next", ".nuxt", ".vite",
             // CMake — thư mục build artifact phổ biến
-            "build", "cmake-build-debug", "cmake-build-release",
+            "cmake-build-debug", "cmake-build-release",
             "cmake-build-relwithdebinfo", "cmake-build-minsizerel",
             // Swift — thư mục build của SPM
             ".build"

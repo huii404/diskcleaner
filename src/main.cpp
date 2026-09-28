@@ -17,6 +17,7 @@ void printHelp(const char* exeName) {
 
 int main(int argc, char* argv[]) {
     CleanerCore::initConsole();
+    system("title V1.0.3");
 
     if (argc > 1) {
         std::string arg = argv[1];
@@ -28,7 +29,13 @@ int main(int argc, char* argv[]) {
             if (!CleanerCore::isElevated() && CleanerCore::restartAsAdmin("--all")) {
                 return 0;
             }
-            DiskCleaner::runAutomaticCleanup(true);
+            DiskCleaner::printBanner();
+            CleanStats s = DiskCleaner::runScope(CleanScope::All, false);
+            long long totalBytes = s.bytesFreed + s.bytesRecycled;
+            std::cout << CleanerCore::C_GREEN << CleanerCore::C_BOLD
+                      << "TỔNG ĐÃ GIẢI PHÓNG: " << CleanerCore::formatSize(totalBytes)
+                      << CleanerCore::C_RESET << "\n";
+            CleanerCore::waitEnter();
             return 0;
         } else if (arg == "--temp") {
             CleanStats s = DiskCleaner::runScope(CleanScope::SurfaceAndTemp, false);

@@ -211,9 +211,6 @@ CleanStats DiskCleaner::runScope(CleanScope scope, bool dryRun) {
     return total;
 }
 
-CleanStats DiskCleaner::runAll(bool dryRun) {
-    return runScope(CleanScope::All, dryRun);
-}
 
 void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     std::vector<AutoStageResult> stages = {
@@ -258,8 +255,3 @@ void DiskCleaner::runAutomaticCleanup(bool waitAtEnd) {
     if (waitAtEnd) CleanerCore::waitEnter();
 }
 
-// runInteractiveMenu không còn được dùng — giữ lại để tránh linker error
-// nếu có code bên ngoài vẫn gọi (forward-compat).
-void DiskCleaner::runInteractiveMenu() {
-    runAutomaticCleanup(true);
-}

@@ -23,14 +23,11 @@ public:
     // Chạy dọn dẹp theo phạm vi cụ thể
     static CleanStats runScope(CleanScope scope, bool dryRun);
 
-    // Chạy toàn diện (tất cả các module)
-    static CleanStats runAll(bool dryRun);
 
     // Luồng một nút: tự kiểm tra, dọn từng tiêu chí và cập nhật dashboard.
     static void runAutomaticCleanup(bool waitAtEnd = true);
 
-    // Menu tương tác người dùng
-    static void runInteractiveMenu();
+
 };
 
 #endif // DISK_CLEANER_H
