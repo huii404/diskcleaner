@@ -12,6 +12,7 @@
 
 const char* CleanerCore::C_RESET   = "\033[0m";
 const char* CleanerCore::C_BOLD    = "\033[1m";
+const char* CleanerCore::C_DIM     = "\033[2m";
 const char* CleanerCore::C_RED     = "\033[91m";
 const char* CleanerCore::C_GREEN   = "\033[92m";
 const char* CleanerCore::C_YELLOW  = "\033[93m";
@@ -186,7 +187,7 @@ bool CleanerCore::restartAsAdmin(const std::string& args) {
     return false;
 }
 
-bool CleanerCore::runCommand(const std::string& cmd, bool hideWindow) {
+bool CleanerCore::runCommand(const std::string& cmd, bool hideWindow, DWORD timeoutMs) {
     STARTUPINFOA si{};
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi = {};
@@ -199,15 +200,25 @@ bool CleanerCore::runCommand(const std::string& cmd, bool hideWindow) {
     cmdVec.push_back('\0');
 
     DWORD flags = hideWindow ? CREATE_NO_WINDOW : 0;
-    if (CreateProcessA(NULL, cmdVec.data(), NULL, NULL, FALSE, flags, NULL, NULL, &si, &pi)) {
-        WaitForSingleObject(pi.hProcess, INFINITE);
+    if (!CreateProcessA(NULL, cmdVec.data(), NULL, NULL, FALSE, flags, NULL, NULL, &si, &pi)) {
+        return false;
+    }
+
+    DWORD waitResult = WaitForSingleObject(pi.hProcess, timeoutMs);
+    bool success = false;
+    if (waitResult == WAIT_OBJECT_0) {
+        // Tiến trình kết thúc trong thời gian cho phép
         DWORD exitCode = 0;
         GetExitCodeProcess(pi.hProcess, &exitCode);
-        CloseHandle(pi.hProcess);
-        CloseHandle(pi.hThread);
-        return (exitCode == 0);
+        success = (exitCode == 0);
+    } else {
+        // Timeout hoặc lỗi wait — buộc kết thúc tiến trình để không treo
+        TerminateProcess(pi.hProcess, 1);
+        WaitForSingleObject(pi.hProcess, 5000); // Chờ tối đa 5 giây để process die
     }
-    return false;
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return success;
 }
 
 bool CleanerCore::wipeFolderContents(const fs::path& dirPath, bool dryRun, CleanStats& stats) {
@@ -460,8 +471,10 @@ bool CleanerCore::takeOwnershipAndGrantAdmin(const fs::path& targetPath) {
 }
 
 bool CleanerCore::filesHaveSameContent(const fs::path& first, const fs::path& second) {
-    std::error_code ec;
-    if (fs::file_size(first, ec) != fs::file_size(second, ec) || ec) return false;
+    std::error_code ec1, ec2;
+    uintmax_t sz1 = fs::file_size(first, ec1);
+    uintmax_t sz2 = fs::file_size(second, ec2);
+    if (ec1 || ec2 || sz1 != sz2) return false;
     std::ifstream a(first, std::ios::binary);
     std::ifstream b(second, std::ios::binary);
     if (!a || !b) return false;

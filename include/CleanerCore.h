@@ -38,6 +38,7 @@ public:
     static const char* C_GREEN;
     static const char* C_YELLOW;
     static const char* C_CYAN;
+    static const char* C_DIM;     // Xám mờ — dùng cho stage chưa chạy
 
     static void initConsole();
     static void cls();
@@ -53,7 +54,12 @@ public:
     static bool restartAsAdmin(const std::string& args = "");
 
     // Tác vụ thực thi dòng lệnh an toàn
-    static bool runCommand(const std::string& cmd, bool hideWindow = true);
+    // timeoutMs: thời gian chờ tối đa (ms). Mặc định 5 phút — đủ cho hầu hết lệnh.
+    // Dùng DISM_CMD_TIMEOUT_MS cho các lệnh DISM có thể chạy lâu.
+    static constexpr DWORD DEFAULT_CMD_TIMEOUT_MS = 5 * 60 * 1000;   // 5 phút
+    static constexpr DWORD DISM_CMD_TIMEOUT_MS    = 45 * 60 * 1000;  // 45 phút
+    static bool runCommand(const std::string& cmd, bool hideWindow = true,
+                           DWORD timeoutMs = DEFAULT_CMD_TIMEOUT_MS);
     // Kiểm tra đường dẫn nguy hiểm - KHÔNG BAO GIỜ xóa thư mục gốc hệ thống
     static bool isCriticalPath(const fs::path& p);
 

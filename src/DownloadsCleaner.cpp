@@ -1,8 +1,7 @@
 #include "DownloadsCleaner.h"
-#include <iostream>
 #include <cstdio>
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <regex>
 #include <algorithm>
 #include <shlobj.h>
@@ -126,8 +125,8 @@ std::string DownloadsCleaner::getExeProductName(const std::string& exePath) {
     } *lpTranslate = NULL;
     UINT cbTranslate = 0;
 
-    std::string productName = "";
-    std::string fileDescription = "";
+    std::string productName;
+    std::string fileDescription;
 
     auto queryField = [&](const char *blockFormat, WORD lang, WORD cp, const char *field) -> std::string {
         char subBlock[128];
@@ -230,7 +229,7 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
 
     // Regex phát hiện bản sao Windows: "filename (1).ext", "filename (2).ext"
     static const std::regex dupRegex(R"(^(.+?)\s*\(([0-9]+)\)\.([a-zA-Z0-9]+)$)", std::regex::icase);
-    std::map<std::string, std::vector<DownloadFileItem>> groups;
+    std::unordered_map<std::string, std::vector<DownloadFileItem>> groups;
 
     for (const auto &entry : fs::directory_iterator(dlPath, fs::directory_options::skip_permission_denied, ec)) {
         if (!entry.is_regular_file(ec)) continue;
@@ -276,7 +275,7 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
 
         // A. NẾU LÀ FILE BỘ CÀI (.EXE / .MSI) -> KIỂM TRA ĐÃ CÀI ĐẶT CHƯA
         if (isExe) {
-            std::string prodName = "";
+            std::string prodName;
             for (const auto &item : fileList) {
                 if (item.ext == ".exe") {
                     std::string pName = getExeProductName(item.fullPath.string());
@@ -359,40 +358,21 @@ CleanStats DownloadsCleaner::clean(bool dryRun) {
                 }
             }
 
-            // Kiểm tra có file gốc (copyIndex == 0) không
-            bool hasBase = (fileList[0].copyIndex == 0);
 
             for (size_t i = 0; i < fileList.size(); ++i) {
-                // Giữ lại bản gốc (copyIndex == 0)
-                if (hasBase && i == 0) {
-                    continue;
-                }
+                // Luôn giữ phần tử đầu tiên (bản gốc hoặc bản sao có chỉ số nhỏ nhất)
+                if (i == 0) continue;
 
                 // Giữ lại bản sao có chỉ số cao nhất (nếu có bản sao)
-                if (maxCopyIndex > 0 && i == highestIdx) {
-                    continue;
-                }
-
-                // Nếu không có bản gốc (chỉ có các bản sao (1), (2), (5)...):
-                // Giữ lại bản sao đầu tiên (thay thế cho bản gốc) và bản sao cao nhất
-                if (!hasBase && i == 0) {
-                    continue;
-                }
+                if (maxCopyIndex > 0 && i == highestIdx) continue;
 
                 // Tên dạng "file (N)" chưa đủ chứng minh là bản sao. Chỉ xóa khi
                 // nội dung giống hệt một trong các bản được giữ lại.
-                bool isExactDuplicate = false;
-                if (hasBase) {
-                    isExactDuplicate = CleanerCore::filesHaveSameContent(
-                        fileList[i].fullPath, fileList[0].fullPath);
-                }
-                if (!isExactDuplicate && maxCopyIndex > 0) {
+                bool isExactDuplicate = CleanerCore::filesHaveSameContent(
+                    fileList[i].fullPath, fileList[0].fullPath);
+                if (!isExactDuplicate && maxCopyIndex > 0 && highestIdx != 0) {
                     isExactDuplicate = CleanerCore::filesHaveSameContent(
                         fileList[i].fullPath, fileList[highestIdx].fullPath);
-                }
-                if (!hasBase && !isExactDuplicate) {
-                    isExactDuplicate = CleanerCore::filesHaveSameContent(
-                        fileList[i].fullPath, fileList[0].fullPath);
                 }
                 if (isExactDuplicate) {
                     CleanerCore::moveToRecycleBin(fileList[i].fullPath, dryRun, stats);

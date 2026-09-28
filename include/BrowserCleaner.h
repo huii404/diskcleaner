@@ -9,8 +9,7 @@
  *   (Hỗ trợ đa profile: Default, Profile 1, Profile 2, Guest, System...)
  *   (Các loại cache: Cache, Code Cache, GPUCache, DawnCache, ShaderCache, Service Worker)
  * - Gecko based: Mozilla Firefox (Profiles Roaming & Local: cache2, startupCache, jumpListCache)
- * - App Cache: Discord, Telegram Desktop
- * (Đã loại trừ hoàn toàn cache driver card đồ họa NVIDIA GLCache để tránh lỗi)
+ * - Zalo PC: Dọn cache Electron, media tạm, log, bản cài đặt cũ
  */
 class BrowserCleaner {
 public:
